@@ -1,4 +1,4 @@
-import tensorflow as tf
+from tensorflow import keras, data, device
 from time import time
 from sys import argv
 
@@ -10,16 +10,16 @@ def main():
 	mod_file = argv[1]
 	b_sz = int(argv[2])
 	if '--cpu' in argv:
-		device = 'device:CPU:0'
+		dev = 'device:CPU:0'
 	else:
-		device = 'device:GPU:0'
+		dev = 'device:GPU:0'
 
-	model = tf.keras.models.load_model(mod_file, compile=False)
+	model = keras.models.load_model(mod_file, compile=False)
 
-	(x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10.load_data()
+	(x_train, y_train), (x_test, y_test) = keras.datasets.cifar10.load_data()
 
-	x_ds = tf.data.Dataset.from_tensor_slices(x_test.astype('float32'))
-	y_ds = tf.data.Dataset.from_tensor_slices(y_test.astype('float32'))
+	x_ds = data.Dataset.from_tensor_slices(x_test.astype('float32'))
+	y_ds = data.Dataset.from_tensor_slices(y_test.astype('float32'))
 
 	model.compile(loss='sparse_categorical_crossentropy',
               metrics=['accuracy'])
@@ -30,7 +30,7 @@ def main():
 	test_ds = x_ds.take(1024).batch(b_sz)
 	steps = 1024 // b_sz
 	print('Measuring speed...')
-	with tf.device(device): 
+	with device(dev): 
 		start = time()
 		for batch in test_ds:
 			    prediction = model.predict(batch)
