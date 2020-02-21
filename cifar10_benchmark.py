@@ -20,12 +20,13 @@ def main():
 
 	x_ds = data.Dataset.from_tensor_slices(x_test.astype('float32'))
 	y_ds = data.Dataset.from_tensor_slices(y_test.astype('float32'))
+	eval_ds = data.Dataset.zip((x_ds, y_ds)).batch(64)
 
 	model.compile(loss='sparse_categorical_crossentropy',
               metrics=['accuracy'])
 
 	print('Evaluating accuracy...')
-	_, acc = model.evaluate(x_test, y_test, verbose=0)
+	_, acc = model.evaluate(eval_ds, verbose=0)
 
 	test_ds = x_ds.take(1024).batch(b_sz)
 	steps = 1024 // b_sz
