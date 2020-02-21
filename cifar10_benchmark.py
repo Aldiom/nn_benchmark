@@ -1,5 +1,5 @@
 from tensorflow import keras, data, device
-from time import time
+from timeit import timeit, repeat
 from sys import argv
 
 def main():
@@ -16,7 +16,7 @@ def main():
 
 	model = keras.models.load_model(mod_file, compile=False)
 
-	(x_train, y_train), (x_test, y_test) = keras.datasets.cifar10.load_data()
+	(_, _), (x_test, y_test) = keras.datasets.cifar10.load_data()
 
 	x_ds = data.Dataset.from_tensor_slices(x_test.astype('float32'))
 	y_ds = data.Dataset.from_tensor_slices(y_test.astype('float32'))
@@ -30,14 +30,14 @@ def main():
 	test_ds = x_ds.take(1024).batch(b_sz)
 	steps = 1024 // b_sz
 	print('Measuring speed...')
-	with device(dev): 
-		start = time()
-		for batch in test_ds:
-			    prediction = model.predict(batch)
-		stop = time()
+	test_code = ''.join(('with device(dev):\n',
+	' for batch in test_ds:\n',
+	'  prediction = model.predict(batch)'))
+	time = timeit(test_code, number=1, globals={'device':device, 'dev':dev,
+										'test_ds':test_ds, 'model':model})
 	print('Metrics for model "%s", with batch size %d:' % (mod_file, b_sz))
-	print('Time: %.3f s' % (stop - start))
-	print('Speed: %.1f inf/s' % (steps * b_sz / (stop-start)))
+	print('Time: %.3f s' % time)
+	print('Speed: %.1f inf/s' % (steps * b_sz / time))
 	print('Accuracy: %.2f' % (100 * acc), '%')
 	return 0
 
