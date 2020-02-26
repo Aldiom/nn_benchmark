@@ -1,15 +1,20 @@
 from tensorflow import keras, data, device
 from timeit import timeit, repeat
-from sys import argv
+import argparse
 
-def main():
-	# args: model batch_size
-	if len(argv) != 3 and len(argv) != 4:
-		print('Usage:', argv[0], 'model_file batch_size [--cpu]')
-		return 1
-	mod_file = argv[1]
-	b_sz = int(argv[2])
-	if '--cpu' in argv:
+parser = argparse.ArgumentParser()
+parser.add_argument('mod_file', help='model file')
+parser.add_argument('b_sz', help='batch size', type=int)
+parser.add_argument('--cpu', help='force CPU usage', action='store_true')
+parser.add_argument('--acc', help='measure accuracy', action='store_true')
+parser.add_argument('-n', help='number of trials', type=int, default=1)
+arguments = parser.parse_args()
+
+def main(args):
+	mod_file = args.mod_file
+	b_sz = args.b_sz
+	if args.cpu:
+		print('Forcing CPU usage')
 		dev = 'device:CPU:0'
 	else:
 		dev = 'device:GPU:0'
@@ -24,9 +29,10 @@ def main():
 
 	model.compile(loss='sparse_categorical_crossentropy',
               metrics=['accuracy'])
-
-	print('Evaluating accuracy...')
-	_, acc = model.evaluate(eval_ds, verbose=0)
+	
+	if args.acc:
+		print('Evaluating accuracy...')
+		_, acc = model.evaluate(eval_ds, verbose=0)
 
 	test_ds = x_ds.take(1024).batch(b_sz)
 	steps = 1024 // b_sz
@@ -34,13 +40,14 @@ def main():
 	test_code = ''.join(('with device(dev):\n',
 	' for batch in test_ds:\n',
 	'  prediction = model.predict(batch)'))
-	time = timeit(test_code, number=1, globals={'device':device, 'dev':dev,
-										'test_ds':test_ds, 'model':model})
+	time = repeat(test_code, number=1, globals={'device':device, 'dev':dev,
+				'test_ds':test_ds, 'model':model}, repeat=args.n)
+	time = min(time)
 	print('Metrics for model "%s", with batch size %d:' % (mod_file, b_sz))
 	print('Time: %.3f s' % time)
 	print('Speed: %.1f inf/s' % (steps * b_sz / time))
-	print('Accuracy: %.2f' % (100 * acc), '%')
+	if args.acc:
+		print('Accuracy: %.2f' % (100 * acc), '%')
 	return 0
 
-main()
-
+main(arguments)
