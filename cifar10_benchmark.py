@@ -1,4 +1,4 @@
-from tensorflow import keras, data, device
+from tensorflow import keras, data, device, lite
 from timeit import timeit, repeat
 import argparse
 
@@ -12,6 +12,7 @@ arguments = parser.parse_args()
 
 def main(args):
 	mod_file = args.mod_file
+	tflite = '.tflite' in mod_file
 	b_sz = args.b_sz
 	if args.cpu:
 		print('Forcing CPU usage')
@@ -19,7 +20,10 @@ def main(args):
 	else:
 		dev = 'device:GPU:0'
 
-	model = keras.models.load_model(mod_file, compile=False)
+	if tflite:
+		model = lite.Interpreter(model_path = mod_file)
+	else:
+		model = keras.models.load_model(mod_file, compile=False)
 
 	(_, _), (x_test, y_test) = keras.datasets.cifar10.load_data()
 
@@ -27,26 +31,40 @@ def main(args):
 	y_ds = data.Dataset.from_tensor_slices(y_test.astype('float32'))
 	eval_ds = data.Dataset.zip((x_ds, y_ds)).batch(64)
 
-	model.compile(loss='sparse_categorical_crossentropy',
+	if not tflite:
+		model.compile(loss='sparse_categorical_crossentropy',
               metrics=['accuracy'])
-	
-	if args.acc:
-		print('Evaluating accuracy...')
-		_, acc = model.evaluate(eval_ds, verbose=0)
+		if args.acc:
+			print('Evaluating accuracy...')
+			_, acc = model.evaluate(eval_ds, verbose=0)
 
 	test_ds = x_ds.take(1024).batch(b_sz)
 	steps = 1024 // b_sz
 	print('Measuring speed...')
-	test_code = ''.join(('with device(dev):\n',
-	' for batch in test_ds:\n',
-	'  prediction = model.predict(batch)'))
-	time = repeat(test_code, number=1, globals={'device':device, 'dev':dev,
-				'test_ds':test_ds, 'model':model}, repeat=args.n)
+	if tflite:
+		in_idx = model.get_input_details()[0]['index'] 
+		out_idx = model.get_output_details()[0]['index'] 
+		model.resize_tensor_input(input_idx, [b_sz, 32, 32, 3])
+		model.allocate_tensors()
+		test_code = ''.join(('for batch in test_ds:\n',
+		' model.set_tensor(in_idx, batch)\n',
+		' model.invoke()\n',
+		' prediction = model.get_tensor(out_idx)'))
+		test_vars = {'test_ds':test_ds, 'model':model, 
+				'in_idx':in_idx, 'out_idx':out_idx}
+	else:
+		test_code = ''.join(('with device(dev):\n',
+		' for batch in test_ds:\n',
+		'  prediction = model.predict(batch)'))
+		test_vars = {'device':device, 'dev':dev,
+				'test_ds':test_ds, 'model':model}
+
+	time = repeat(test_code, number=1, globals=test_vars, repeat=args.n)
 	time = min(time)
 	print('Metrics for model "%s", with batch size %d:' % (mod_file, b_sz))
 	print('Time: %.3f s' % time)
 	print('Speed: %.1f inf/s' % (steps * b_sz / time))
-	if args.acc:
+	if args.acc and not tflite:
 		print('Accuracy: %.2f' % (100 * acc), '%')
 	return 0
 
