@@ -1,4 +1,4 @@
-from tensorflow import keras, data, device, lite, saved_model, pad, random
+from tensorflow import keras, data, device, lite, saved_model, pad, random, dtypes
 from timeit import timeit, repeat
 from os.path import isdir
 import argparse
@@ -40,7 +40,7 @@ def main(args):
 			mod_type = 'keras'
 		acc = eval_accuracy(model, imagenet.test_ds, mod_type, (224,224,3))	
 	
-	test_ds = random.normal((224,224,3), mean=0.5, stddev=0.2)
+	test_ds = random.uniform((224,224,3), minval=0, maxval=255, dtype=dtypes.int32)
 	test_ds = data.Dataset.from_tensors(test_ds)
 	test_ds = test_ds.repeat(1024).cache().batch(b_sz)
 	steps = 1024 // b_sz

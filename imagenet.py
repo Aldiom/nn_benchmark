@@ -1,12 +1,12 @@
-import tensorflow as tf
+https://github.com/tensorflow/datasets/raw/master/tensorflow_datasets/image_classification/imagenet2012_labels.txtimport tensorflow as tf
 import os
 
 data_path = 'ILSVRC/' 
-train_datapath = data_path + 'Data/CLS-LOC/train/'
-train_paths = os.listdir(train_datapath)
-train_paths.sort()
+#train_datapath = data_path + 'Data/CLS-LOC/train/'
+#train_paths = os.listdir(train_datapath)
+#train_paths.sort()
 
-label_to_index = dict(((train_paths[i], i) for i in range(1000)))
+#label_to_index = dict(((train_paths[i], i) for i in range(1000)))
 img_paths = []
 
 #for label in train_paths:
@@ -27,6 +27,16 @@ for file in sorted(os.listdir(data_path + 'Annotations/CLS-LOC/val/')):
 			val_labels.append(label)
 			break
 	file.close()
+    
+#labels = list(set(val_labels))
+#labels.sort()
+label_file = data_path + 'imagenet2012_labels.txt'
+label_file = open(label_file)
+labels = []
+for line in label_file:
+	labels.append(line.strip())
+label_file.close()
+label_to_index = dict(((labels[i], i) for i in range(1000)))
 
 box = [224, 224]
 
@@ -35,7 +45,7 @@ def preprocess_image(image, crop_box): # crop_box: target_h, target_w
     im_shape = tf.cast(tf.shape(image)[-3:-1], 'float32')
     image = tf.image.resize(image, [int(0.875*im_shape[0]), int(0.875*im_shape[1])])
     image = tf.image.resize_with_crop_or_pad(image, crop_box[0], crop_box[1])
-    image /= 255.0  # normalize to [0,1] range
+    #image /= 255.0  # normalize to [0,1] range
     
     return image
 
