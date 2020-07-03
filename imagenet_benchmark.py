@@ -1,4 +1,3 @@
-from tensorflow import keras, data, device, lite, saved_model, pad, random, dtypes
 from timeit import timeit, repeat
 from os.path import isdir
 import argparse
@@ -11,7 +10,7 @@ parser.add_argument('--acc', help='measure accuracy', action='store_true')
 parser.add_argument('-n', help='number of trials', type=int, default=1)
 arguments = parser.parse_args()
 
-def main(args):
+def main(args):   
 	mod_file = args.mod_file
 	tflite = '.tflite' in mod_file
 	sav_mod = isdir(mod_file)
@@ -23,11 +22,11 @@ def main(args):
 		dev = 'device:GPU:0'
 
 	if tflite:
-		model = lite.Interpreter(model_path = mod_file)
+		model = tf.lite.Interpreter(model_path = mod_file)
 	elif sav_mod:
-		model = saved_model.load(mod_file)
+		model = tf.saved_model.load(mod_file)
 	else:
-		model = keras.models.load_model(mod_file, compile=False)
+		model = tf.keras.models.load_model(mod_file, compile=False)
 		
 	if args.acc:
 		print('Evaluating accuracy...')
@@ -40,9 +39,10 @@ def main(args):
 			mod_type = 'keras'
 		acc = eval_accuracy(model, imagenet.test_ds, mod_type, (224,224,3))	
 	
-	test_ds = random.uniform((224,224,3), minval=0, maxval=255, dtype=dtypes.int32)
-	test_ds = data.Dataset.from_tensors(test_ds)
-	test_ds = test_ds.repeat(1024).cache().batch(b_sz)
+	test_ds = tf.random.uniform((224,224,3), minval=0, maxval=255, dtype=tf.int32)
+	test_ds = tf.data.Dataset.from_tensors(test_ds)
+	test_ds = test_ds.repeat(1024).map(lambda x: tf.cast(x, tf.uint8))
+	test_ds = test_ds.cache().batch(b_sz)
 	steps = 1024 // b_sz
 	print('Measuring speed...')
 	if tflite:
@@ -67,7 +67,7 @@ def main(args):
 		test_code = ''.join(('with device(dev):\n',
 		' for batch in test_ds:\n',
 		'  prediction = model.predict(batch)'))
-		test_vars = {'device':device, 'dev':dev,
+		test_vars = {'device':tf.device, 'dev':dev,
 				'test_ds':test_ds, 'model':model}
 
 	time = repeat(test_code, number=1, globals=test_vars, repeat=args.n)
@@ -122,4 +122,5 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 
 	return total_corrects / total_examples
 
+import tensorflow as tf 
 main(arguments)

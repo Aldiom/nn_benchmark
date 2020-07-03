@@ -28,14 +28,8 @@ for file in sorted(os.listdir(data_path + 'Annotations/CLS-LOC/val/')):
 			break
 	file.close()
     
-#labels = list(set(val_labels))
-#labels.sort()
-label_file = data_path + 'imagenet2012_labels.txt'
-label_file = open(label_file)
-labels = []
-for line in label_file:
-	labels.append(line.strip())
-label_file.close()
+labels = list(set(val_labels))
+labels.sort()
 label_to_index = dict(((labels[i], i) for i in range(1000)))
 
 box = [224, 224]
