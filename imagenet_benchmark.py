@@ -21,6 +21,7 @@ def main(args):
 	else: #TODO: chequear si hay gpu en sistema
 		dev = 'device:GPU:0'
 
+	print('Loading model...')
 	if tflite:
 		model = tf.lite.Interpreter(model_path = mod_file)
 	elif sav_mod:
@@ -48,14 +49,15 @@ def main(args):
 	if tflite:
 		in_idx = model.get_input_details()[0]['index'] 
 		out_idx = model.get_output_details()[0]['index'] 
-		model.resize_tensor_input(in_idx, [b_sz, 32, 32, 3])
+		model.resize_tensor_input(in_idx, [b_sz, 224, 224, 3])
 		model.allocate_tensors()
 		test_code = ''.join(('for batch in test_ds:\n',
+		' batch = cast(batch, "float32")\n'
 		' model.set_tensor(in_idx, batch)\n',
 		' model.invoke()\n',
 		' prediction = model.get_tensor(out_idx)'))
 		test_vars = {'test_ds':test_ds, 'model':model, 
-				'in_idx':in_idx, 'out_idx':out_idx}
+				'in_idx':in_idx, 'out_idx':out_idx, 'cast':tf.cast}
 	elif sav_mod: 
 		infer = model.signatures['serving_default']
 		output = infer.structured_outputs.keys()
