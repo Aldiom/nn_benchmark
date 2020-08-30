@@ -7,6 +7,7 @@ parser.add_argument('mod_file', help='model file')
 parser.add_argument('b_sz', help='batch size', type=int)
 parser.add_argument('--cpu', help='force CPU usage', action='store_true')
 parser.add_argument('--acc', help='measure accuracy', action='store_true')
+parser.add_argument('--short', help='short measurement', action='store_true')
 parser.add_argument('-n', help='number of trials', type=int, default=1)
 arguments = parser.parse_args()
 
@@ -40,11 +41,13 @@ def main(args):
 			mod_type = 'keras'
 		acc = eval_accuracy(model, imagenet.test_ds, mod_type, (224,224,3))	
 	
+	test_sz = 256 if args.short else 1024
 	test_ds = tf.random.uniform((224,224,3), minval=0, maxval=255, dtype=tf.int32)
 	test_ds = tf.data.Dataset.from_tensors(test_ds)
-	test_ds = test_ds.repeat(1024).map(lambda x: tf.cast(x, tf.uint8))
+	test_ds = test_ds.repeat(test_sz).map(lambda x: tf.cast(x, tf.uint8))
 	test_ds = test_ds.cache().batch(b_sz)
-	steps = 1024 // b_sz
+	steps = test_sz // b_sz
+	if args.short: print('Short test selected')
 	print('Measuring speed...')
 	if tflite:
 		in_idx = model.get_input_details()[0]['index'] 
