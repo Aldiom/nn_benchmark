@@ -83,6 +83,7 @@ def main(args):
 
 def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 	test_ds = test_ds.batch(64)
+	in_shape = list(in_shape)
 
 	if mod_type == 'keras':
 		model.compile(loss='sparse_categorical_crossentropy',
@@ -97,6 +98,7 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 		model.allocate_tensors()
 
 	if mod_type == 'saved':
+		test_ds = test_ds.map(lambda x, y: (tf.cast(x,'uint8'), y))
 		infer = model.signatures['serving_default']
 		output = infer.structured_outputs.keys()
 		output = list(output)[0]
@@ -107,7 +109,7 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 		b_sz = y_batch.shape[0]  
 		if b_sz != 64:
 			padding = ((0,64-b_sz), (0,0), (0,0), (0,0))
-			x_batch = pad(x_batch, padding)
+			x_batch = tf.pad(x_batch, padding)
 
 		if mod_type == 'tflite':	
 			model.set_tensor(in_idx, x_batch)

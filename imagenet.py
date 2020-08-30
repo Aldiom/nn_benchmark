@@ -1,4 +1,4 @@
-https://github.com/tensorflow/datasets/raw/master/tensorflow_datasets/image_classification/imagenet2012_labels.txtimport tensorflow as tf
+import tensorflow as tf
 import os
 
 data_path = 'ILSVRC/' 
