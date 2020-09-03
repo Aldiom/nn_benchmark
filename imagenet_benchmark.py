@@ -122,7 +122,7 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 			outputs = infer(x_batch)[output]
 			outputs = outputs.numpy()
 
-		outputs = outputs.argmax(axis=1).reshape((64,1))
+		outputs = outputs.argmax(axis=1).reshape((64,))
 		corrects = outputs[0:b_sz] == y_batch.numpy()
 		total_corrects += corrects.sum()
 		total_examples += b_sz
