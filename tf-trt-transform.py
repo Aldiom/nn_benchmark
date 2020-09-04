@@ -1,16 +1,26 @@
 import tensorflow as tf
 from tensorflow.python.compiler.tensorrt import trt_convert as trt
+import argparse
 
-input_saved_model_dir = 'allconv_cifar10'
-output_saved_model_dir = 'allconv_cifar10_trt'
+parser = argparse.ArgumentParser()
+parser.add_argument('mod_path', help='input model path')
+parser.add_argument('out_path', help='output model path')
+args = parser.parse_args()
+
 def input_fn():
-	(x_train, _), (_, _) = tf.keras.datasets.cifar10.load_data()
-	x_train = tf.data.Dataset.from_tensor_slices(x_train.astype('float32'))
-	x_train = x_train.batch(16)
-	for batch in x_train:
+	print('Importing ImageNet...')
+	import imagenet
+	train_ds = imagenet.img_ds.map(lambda x: tf.cast(x, 'uint8'))
+	train_ds = train_ds.batch(64)
+	data_len = 50000 // 64
+	count = 0
+	print('Training:')
+	for batch in train_ds:
+		print('\r%d/%d' % (count, data_len), end='')
+		count += 1
 		yield (batch,)
 
-converter = trt.TrtGraphConverterV2(input_saved_model_dir=input_saved_model_dir)
+converter = trt.TrtGraphConverterV2(input_saved_model_dir=args.mod_path)
 converter.convert()
 converter.build(input_fn=input_fn)
-converter.save(output_saved_model_dir)
+converter.save(args.out_path)
