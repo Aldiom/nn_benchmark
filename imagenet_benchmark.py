@@ -1,5 +1,6 @@
 from timeit import timeit, repeat
 from os.path import isdir
+import time as t
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -23,12 +24,17 @@ def main(args):
 		dev = 'device:GPU:0'
 
 	print('Loading model...')
+	start = t.time()
 	if tflite:
 		model = tf.lite.Interpreter(model_path = mod_file)
 	elif sav_mod:
 		model = tf.saved_model.load(mod_file)
 	else:
 		model = tf.keras.models.load_model(mod_file, compile=False)
+	stop = t.time()
+	mins = (stop - start) // 60
+	secs = (stop - start) % 60
+	print('Loaded in %d min %.1f sec' % (mins, secs))
 		
 	if args.acc:
 		print('Evaluating accuracy...')
