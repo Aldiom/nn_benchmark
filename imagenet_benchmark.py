@@ -1,5 +1,7 @@
 from timeit import timeit, repeat
 from os.path import isdir
+import subprocess 
+import threading
 import time as t
 import argparse
 
@@ -9,6 +11,7 @@ parser.add_argument('b_sz', help='batch size', type=int)
 parser.add_argument('--cpu', help='force CPU usage', action='store_true')
 parser.add_argument('--acc', help='measure accuracy', action='store_true')
 parser.add_argument('--short', help='short measurement', action='store_true')
+parser.add_argument('--mem', help='measure RAM usage', action='store_true')
 parser.add_argument('-n', help='number of trials', type=int, default=1)
 arguments = parser.parse_args()
 
@@ -23,6 +26,14 @@ def main(args):
 	else: #TODO: chequear si hay gpu en sistema
 		dev = 'device:GPU:0'
 
+	if args.mem:
+		mem_flag = threading.Event()
+		#mem_flag.acquire()
+		mem_thread = threading.Thread(target=measure_ram, args=(mem_flag, 0.2))
+		mem_thread.start()
+		#mem_flag.release()
+		#mem_flag.acquire()
+
 	print('Loading model...')
 	start = t.time()
 	if tflite:
@@ -35,6 +46,10 @@ def main(args):
 	mins = (stop - start) // 60
 	secs = (stop - start) % 60
 	print('Loaded in %d min %.1f sec' % (mins, secs))
+	if args.mem:
+		pass
+		#mem_flag.release()
+		#mem_flag.acquire()
 		
 	if args.acc:
 		print('Evaluating accuracy...')
@@ -47,13 +62,19 @@ def main(args):
 			mod_type = 'keras'
 		acc = eval_accuracy(model, imagenet.test_ds, mod_type, (224,224,3))	
 	
+	if args.short: print('Short test selected')
 	test_sz = 256 if args.short else 1024
 	test_ds = tf.random.uniform((224,224,3), minval=0, maxval=255, dtype=tf.int32)
 	test_ds = tf.data.Dataset.from_tensors(test_ds)
 	test_ds = test_ds.repeat(test_sz).map(lambda x: tf.cast(x, tf.uint8))
 	test_ds = test_ds.cache().batch(b_sz)
 	steps = test_sz // b_sz
-	if args.short: print('Short test selected')
+
+	if args.mem:
+		pass
+		#mem_flag.release()
+		#mem_flag.acquire()
+
 	print('Measuring speed...')
 	if tflite:
 		in_idx = model.get_input_details()[0]['index'] 
@@ -80,7 +101,9 @@ def main(args):
 		'  prediction = model.predict(batch)'))
 		test_vars = {'device':tf.device, 'dev':dev,
 				'test_ds':test_ds, 'model':model}
-
+	
+	if args.mem:
+		mem_flag.set()
 	time = repeat(test_code, number=1, globals=test_vars, repeat=args.n)
 	time = min(time)
 	print('Metrics for model "%s", with batch size %d:' % (mod_file, b_sz))
@@ -88,6 +111,9 @@ def main(args):
 	print('Speed: %.1f inf/s' % (steps * b_sz / time))
 	if args.acc:
 		print('Accuracy: %.2f' % (100 * acc), '%')
+	if args.mem:
+		mem_flag.clear()
+		mem_thread.join()
 	return 0
 
 def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
@@ -134,6 +160,20 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 		total_examples += b_sz
 
 	return total_corrects / total_examples
+
+def measure_ram(signal, interval):
+	measures = []
+	command = ['nvidia-smi', '--query-gpu=memory.used', 
+	'--format=csv,noheader,nounits']
+	initial_probe = subprocess.run(command, stdout=subprocess.PIPE).stdout
+	signal.wait()
+	while signal.is_set():
+		probe = subprocess.run(command, stdout=subprocess.PIPE).stdout
+		measures.append(int(probe))
+		t.sleep(interval)
+	#print('Idle memory usage: %s MB' % initial_probe)
+	print('Max memory usage: %d MB' % max(measures))
+	return
 
 import tensorflow as tf 
 main(arguments)
