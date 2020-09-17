@@ -64,9 +64,10 @@ def main(args):
 	
 	if args.short: print('Short test selected')
 	test_sz = 256 if args.short else 1024
-	test_ds = tf.random.uniform((224,224,3), minval=0, maxval=255, dtype=tf.int32)
-	test_ds = tf.data.Dataset.from_tensors(test_ds)
-	test_ds = test_ds.repeat(test_sz).map(lambda x: tf.cast(x, tf.uint8))
+	test_ds = tf.random.uniform((test_sz,224,224,3), minval=0, 
+								maxval=255, dtype=tf.int32)
+	test_ds = tf.data.Dataset.from_tensor_slices(test_ds)
+	test_ds = test_ds.map(lambda x: tf.cast(x, tf.uint8))
 	test_ds = test_ds.cache().batch(b_sz)
 	steps = test_sz // b_sz
 
@@ -81,11 +82,15 @@ def main(args):
 		out_idx = model.get_output_details()[0]['index'] 
 		model.resize_tensor_input(in_idx, [b_sz, 224, 224, 3])
 		model.allocate_tensors()
-		test_code = ''.join(('for batch in test_ds:\n',
+		test_code = ['for batch in test_ds:\n',
 		' batch = cast(batch, "float32")\n'
 		' model.set_tensor(in_idx, batch)\n',
 		' model.invoke()\n',
-		' prediction = model.get_tensor(out_idx)'))
+		' prediction = model.get_tensor(out_idx)']
+		in_type = model.get_input_details()[0]['dtype']
+		if in_type == tf.uint8:
+			test_code.pop(1)
+		test_code = ''.join(test_code)
 		test_vars = {'test_ds':test_ds, 'model':model, 
 				'in_idx':in_idx, 'out_idx':out_idx, 'cast':tf.cast}
 	elif sav_mod: 
@@ -127,6 +132,8 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 		return acc
 
 	if mod_type == 'tflite':
+		if model.get_input_details()[0]['dtype'] == tf.uint8:
+			test_ds = test_ds.map(lambda x, y: (tf.cast(x,'uint8'), y))	
 		in_idx = model.get_input_details()[0]['index'] 
 		out_idx = model.get_output_details()[0]['index'] 
 		model.resize_tensor_input(in_idx, [64] + in_shape)
@@ -172,7 +179,7 @@ def measure_ram(signal, interval):
 		measures.append(int(probe))
 		t.sleep(interval)
 	#print('Idle memory usage: %s MB' % initial_probe)
-	print('Max memory usage: %d MB' % max(measures))
+	print('Max memory usage: %d MB' % (max(measures) - int(initial_probe)))
 	return
 
 import tensorflow as tf 
