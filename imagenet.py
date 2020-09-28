@@ -2,31 +2,20 @@ import tensorflow as tf
 import os
 
 data_path = 'ILSVRC/' 
-#train_datapath = data_path + 'Data/CLS-LOC/train/'
-#train_paths = os.listdir(train_datapath)
-#train_paths.sort()
-
-#label_to_index = dict(((train_paths[i], i) for i in range(1000)))
-img_paths = []
-
-#for label in train_paths:
-#    for example in os.listdir(train_datapath + label):
-#        img_paths.append(label + example)
-        
-		        
+       
 val_datapath = data_path + 'Data/CLS-LOC/val/'
 val_paths = sorted(os.listdir(val_datapath))
 val_labels = []
-				    
+  
 for file in sorted(os.listdir(data_path + 'Annotations/CLS-LOC/val/')): 
-	file = open(data_path + 'Annotations/CLS-LOC/val/' + file)
-	for line in file:
-		if '<name>' in line:
-			line = line.strip()
-			label = line[6:-7] # remove "<name> ... </name>"
-			val_labels.append(label)
-			break
-	file.close()
+    file = open(data_path + 'Annotations/CLS-LOC/val/' + file)
+    for line in file:
+        if '<name>' in line:
+            line = line.strip()
+            label = line[6:-7] # remove "<name> ... </name>"
+            val_labels.append(label)
+            break
+    file.close()
     
 labels = list(set(val_labels))
 labels.sort()
@@ -53,4 +42,3 @@ label_ds = tf.data.Dataset.from_tensor_slices([label_to_index[i] for i in val_la
 img_ds = img_ds.map(lambda x: load_and_preprocess_image(x, box, val_datapath))
 
 test_ds = tf.data.Dataset.zip((img_ds, label_ds))
-test_ds = test_ds.cache()

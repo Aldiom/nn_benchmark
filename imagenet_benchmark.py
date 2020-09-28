@@ -82,27 +82,27 @@ def main(args):
 		out_idx = model.get_output_details()[0]['index'] 
 		model.resize_tensor_input(in_idx, [b_sz, 224, 224, 3])
 		model.allocate_tensors()
-		test_code = ['for batch in test_ds:\n',
-		' batch = cast(batch, "float32")\n'
-		' model.set_tensor(in_idx, batch)\n',
-		' model.invoke()\n',
+		test_code = ['for batch in test_ds:',
+		' batch = cast(batch, "float32")',
+		' model.set_tensor(in_idx, batch)',
+		' model.invoke()',
 		' prediction = model.get_tensor(out_idx)']
 		in_type = model.get_input_details()[0]['dtype']
 		if in_type == tf.uint8:
 			test_code.pop(1)
-		test_code = ''.join(test_code)
+		test_code = '\n'.join(test_code)
 		test_vars = {'test_ds':test_ds, 'model':model, 
 				'in_idx':in_idx, 'out_idx':out_idx, 'cast':tf.cast}
 	elif sav_mod: 
 		infer = model.signatures['serving_default']
 		output = infer.structured_outputs.keys()
 		output = list(output)[0]
-		test_code = ''.join(('for batch in test_ds:\n',
+		test_code = '\n'.join(('for batch in test_ds:',
 		' prediction = infer(batch)[output]'))
 		test_vars = {'test_ds':test_ds, 'infer':infer, 'output':output}
 	else:
-		test_code = ''.join(('with device(dev):\n',
-		' for batch in test_ds:\n',
+		test_code = '\n'.join(('with device(dev):',
+		' for batch in test_ds:',
 		'  prediction = model.predict(batch)'))
 		test_vars = {'device':tf.device, 'dev':dev,
 				'test_ds':test_ds, 'model':model}
