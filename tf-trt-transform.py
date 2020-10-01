@@ -5,7 +5,11 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('mod_path', help='input model path')
 parser.add_argument('out_path', help='output model path')
+parser.add_argument('--mode', help='precision mode', default='fp32')
+parser.add_argument('--build', help='build engine with ImageNet', action='store_true')
 args = parser.parse_args()
+
+assert args.mode in trt.TrtPrecisionMode.supported_precision_modes(), 'Invalid precision mode.'
 
 def input_fn():
 	print('Importing ImageNet...')
@@ -20,7 +24,15 @@ def input_fn():
 		count += 1
 		yield (batch,)
 
-converter = trt.TrtGraphConverterV2(input_saved_model_dir=args.mod_path)
+params = trt.TrtConversionParams(
+    rewriter_config_template=None,
+    max_workspace_size_bytes=1<<30,
+    precision_mode=args.mode, minimum_segment_size=3,
+    is_dynamic_op=True, maximum_cached_engines=1, use_calibration=True,
+    max_batch_size=64, allow_build_at_runtime=True)
+
+converter = trt.TrtGraphConverterV2(input_saved_model_dir=args.mod_path, conversion_params=params)
 converter.convert()
-converter.build(input_fn=input_fn)
+if args.build:
+	converter.build(input_fn=input_fn)
 converter.save(args.out_path)
