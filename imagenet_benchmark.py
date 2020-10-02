@@ -12,6 +12,7 @@ parser.add_argument('--cpu', help='force CPU usage', action='store_true')
 parser.add_argument('--acc', help='measure accuracy', action='store_true')
 parser.add_argument('--short', help='short measurement', action='store_true')
 parser.add_argument('--mem', help='measure RAM usage', action='store_true')
+parser.add_argument('--input', help='input size', type=int, default=224)
 parser.add_argument('-n', help='number of trials', type=int, default=1)
 arguments = parser.parse_args()
 
@@ -26,6 +27,8 @@ def main(args):
 	else: #TODO: chequear si hay gpu en sistema
 		dev = 'device:GPU:0'
 
+	in_shape = (args.input, args.input, 3)
+	
 	if args.mem:
 		mem_flag = threading.Event()
 		#mem_flag.acquire()
@@ -60,11 +63,12 @@ def main(args):
 			mod_type = 'saved'
 		else:
 			mod_type = 'keras'
-		acc = eval_accuracy(model, imagenet.test_ds, mod_type, (224,224,3))	
+		eval_ds = imagenet.load_and_preprocess_ds(in_shape[0:2])
+		acc = eval_accuracy(model, eval_ds, mod_type, in_shape)	
 	
 	if args.short: print('Short test selected')
 	test_sz = 256 if args.short else 1024
-	test_ds = tf.random.uniform((test_sz,224,224,3), minval=0, 
+	test_ds = tf.random.uniform((test_sz,) + in_shape, minval=0, 
 								maxval=255, dtype=tf.int32)
 	test_ds = tf.data.Dataset.from_tensor_slices(test_ds)
 	test_ds = test_ds.map(lambda x: tf.cast(x, tf.uint8))
@@ -80,7 +84,7 @@ def main(args):
 	if tflite:
 		in_idx = model.get_input_details()[0]['index'] 
 		out_idx = model.get_output_details()[0]['index'] 
-		model.resize_tensor_input(in_idx, [b_sz, 224, 224, 3])
+		model.resize_tensor_input(in_idx, (b_sz,) + in_shape)
 		model.allocate_tensors()
 		test_code = ['for batch in test_ds:',
 		' batch = cast(batch, "float32")',
