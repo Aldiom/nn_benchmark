@@ -7,7 +7,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('mod_file', help='model file')
-parser.add_argument('b_sz', help='batch size', type=int)
+parser.add_argument('b_sz', help='batch size')
 parser.add_argument('--cpu', help='force CPU usage', action='store_true')
 parser.add_argument('--acc', help='measure accuracy', action='store_true')
 parser.add_argument('--short', help='short measurement', action='store_true')
@@ -20,7 +20,7 @@ def main(args):
 	mod_file = args.mod_file
 	tflite = '.tflite' in mod_file
 	sav_mod = isdir(mod_file)
-	b_sz = args.b_sz
+	b_sizes = args.b_sz.split(',')
 	if args.cpu:
 		print('Forcing CPU usage')
 		dev = 'device:CPU:0'
@@ -31,8 +31,10 @@ def main(args):
 	
 	if args.mem:
 		mem_flag = threading.Event()
+		syn_flag = threading.Event()
 		#mem_flag.acquire()
-		mem_thread = threading.Thread(target=measure_ram, args=(mem_flag, 0.2))
+		mem_thread = threading.Thread(target=measure_ram, 
+			args=(mem_flag, syn_flag, 0.2, len(b_sizes)))
 		mem_thread.start()
 		#mem_flag.release()
 		#mem_flag.acquire()
@@ -49,8 +51,8 @@ def main(args):
 	mins = (stop - start) // 60
 	secs = (stop - start) % 60
 	print('Loaded in %d min %.1f sec' % (mins, secs))
-	if args.mem:
-		pass
+	#if args.mem:
+		#pass
 		#mem_flag.release()
 		#mem_flag.acquire()
 		
@@ -63,66 +65,69 @@ def main(args):
 			mod_type = 'saved'
 		else:
 			mod_type = 'keras'
-		eval_ds = imagenet.load_and_preprocess_ds(in_shape[0:2])
+		eval_ds = imagenet.load_ds(in_shape[0:2])
 		acc = eval_accuracy(model, eval_ds, mod_type, in_shape)	
 	
 	if args.short: print('Short test selected')
 	test_sz = 256 if args.short else 1024
-	test_ds = tf.random.uniform((test_sz,) + in_shape, minval=0, 
+	bench_ds = tf.random.uniform((test_sz,) + in_shape, minval=0, 
 								maxval=255, dtype=tf.int32)
-	test_ds = tf.data.Dataset.from_tensor_slices(test_ds)
-	test_ds = test_ds.map(lambda x: tf.cast(x, tf.uint8))
-	test_ds = test_ds.cache().batch(b_sz)
-	steps = test_sz // b_sz
-
-	if args.mem:
-		pass
-		#mem_flag.release()
-		#mem_flag.acquire()
-
-	print('Measuring speed...')
-	if tflite:
-		in_idx = model.get_input_details()[0]['index'] 
-		out_idx = model.get_output_details()[0]['index'] 
-		model.resize_tensor_input(in_idx, (b_sz,) + in_shape)
-		model.allocate_tensors()
-		test_code = ['for batch in test_ds:',
-		' batch = cast(batch, "float32")',
-		' model.set_tensor(in_idx, batch)',
-		' model.invoke()',
-		' prediction = model.get_tensor(out_idx)']
-		in_type = model.get_input_details()[0]['dtype']
-		if in_type == tf.uint8:
-			test_code.pop(1)
-		test_code = '\n'.join(test_code)
-		test_vars = {'test_ds':test_ds, 'model':model, 
-				'in_idx':in_idx, 'out_idx':out_idx, 'cast':tf.cast}
-	elif sav_mod: 
-		infer = model.signatures['serving_default']
-		output = infer.structured_outputs.keys()
-		output = list(output)[0]
-		test_code = '\n'.join(('for batch in test_ds:',
-		' prediction = infer(batch)[output]'))
-		test_vars = {'test_ds':test_ds, 'infer':infer, 'output':output}
-	else:
-		test_code = '\n'.join(('with device(dev):',
-		' for batch in test_ds:',
-		'  prediction = model.predict(batch)'))
-		test_vars = {'device':tf.device, 'dev':dev,
-				'test_ds':test_ds, 'model':model}
+	bench_ds = tf.data.Dataset.from_tensor_slices(bench_ds)
+	bench_ds = bench_ds.map(lambda x: tf.cast(x, tf.uint8))
+	bench_ds = bench_ds.cache()
+	b_sizes = map(int, b_sizes)
+	for b_sz in b_sizes:
+		test_ds = bench_ds.batch(b_sz)
+		steps = test_sz // b_sz
+		#if args.mem:
+			#pass
+			#mem_flag.release()
+			#mem_flag.acquire()
+		print('Measuring speed...')
+		if tflite:
+			in_idx = model.get_input_details()[0]['index'] 
+			out_idx = model.get_output_details()[0]['index'] 
+			model.resize_tensor_input(in_idx, (b_sz,) + in_shape)
+			model.allocate_tensors()
+			test_code = ['for batch in test_ds:',
+			' batch = cast(batch, "float32")',
+			' model.set_tensor(in_idx, batch)',
+			' model.invoke()',
+			' prediction = model.get_tensor(out_idx)']
+			in_type = model.get_input_details()[0]['dtype']
+			if in_type == tf.uint8:
+				test_code.pop(1)
+			test_code = '\n'.join(test_code)
+			test_vars = {'test_ds':test_ds, 'model':model, 
+					'in_idx':in_idx, 'out_idx':out_idx, 'cast':tf.cast}
+		elif sav_mod: 
+			infer = model.signatures['serving_default']
+			output = infer.structured_outputs.keys()
+			output = list(output)[0]
+			test_code = '\n'.join(('for batch in test_ds:',
+			' prediction = infer(batch)[output]'))
+			test_vars = {'test_ds':test_ds, 'infer':infer, 'output':output}
+		else:
+			test_code = '\n'.join(('with device(dev):',
+			' for batch in test_ds:',
+			'  prediction = model.predict(batch)'))
+			test_vars = {'device':tf.device, 'dev':dev,
+					'test_ds':test_ds, 'model':model}
 	
-	if args.mem:
-		mem_flag.set()
-	time = repeat(test_code, number=1, globals=test_vars, repeat=args.n)
-	time = min(time)
-	print('Metrics for model "%s", with batch size %d:' % (mod_file, b_sz))
-	print('Time: %.3f s' % time)
-	print('Speed: %.1f inf/s' % (steps * b_sz / time))
-	if args.acc:
-		print('Accuracy: %.2f' % (100 * acc), '%')
-	if args.mem:
-		mem_flag.clear()
-		mem_thread.join()
+		if args.mem:
+			syn_flag.wait()
+			syn_flag.clear()
+			mem_flag.set()
+		time = repeat(test_code, number=1, globals=test_vars, repeat=args.n)
+		time = min(time)
+		print('Metrics for model "%s", with batch size %d:' % (mod_file, b_sz))
+		print('Time: %.3f s' % time)
+		print('Speed: %.1f inf/s' % (steps * b_sz / time))
+		if args.acc:
+			print('Accuracy: %.2f' % (100 * acc), '%')
+		if args.mem:
+			mem_flag.clear()
+			#mem_thread.join()
 	return 0
 
 def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
@@ -172,18 +177,20 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 
 	return total_corrects / total_examples
 
-def measure_ram(signal, interval):
-	measures = []
+def measure_ram(sig_in, sig_out, interval, num_tests=1):	
 	command = ['nvidia-smi', '--query-gpu=memory.used', 
 	'--format=csv,noheader,nounits']
 	initial_probe = subprocess.run(command, stdout=subprocess.PIPE).stdout
-	signal.wait()
-	while signal.is_set():
-		probe = subprocess.run(command, stdout=subprocess.PIPE).stdout
-		measures.append(int(probe))
-		t.sleep(interval)
-	#print('Idle memory usage: %s MB' % initial_probe)
-	print('Max memory usage: %d MB' % (max(measures) - int(initial_probe)))
+	for i in range(num_tests):
+		measures = []
+		sig_out.set()
+		sig_in.wait()
+		while sig_in.is_set():
+			probe = subprocess.run(command, stdout=subprocess.PIPE).stdout
+			measures.append(int(probe))
+			t.sleep(interval)
+		#print('Idle memory usage: %s MB' % initial_probe)
+		print('Max memory usage: %d MB' % (max(measures) - int(initial_probe)))
 	return
 
 import tensorflow as tf 
