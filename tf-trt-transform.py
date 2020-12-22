@@ -7,6 +7,7 @@ parser.add_argument('mod_path', help='input model path')
 parser.add_argument('out_path', help='output model path')
 parser.add_argument('--mode', help='precision mode', default='fp32')
 parser.add_argument('--build', help='build engine with ImageNet', action='store_true')
+parser.add_argument('--input', help='input size', type=int, default=224)
 args = parser.parse_args()
 
 assert args.mode in trt.TrtPrecisionMode.supported_precision_modes(), 'Invalid precision mode.'
@@ -14,7 +15,7 @@ assert args.mode in trt.TrtPrecisionMode.supported_precision_modes(), 'Invalid p
 def input_fn():
 	print('Importing ImageNet...')
 	import imagenet
-	train_ds = imagenet.img_ds.map(lambda x: tf.cast(x, 'uint8'))
+	train_ds = imagenet.load_ds(2*(args.input,)).take(192).map(lambda x,y: tf.cast(x, 'uint8'))
 	train_ds = train_ds.batch(64)
 	data_len = 50000 // 64
 	count = 0
@@ -32,7 +33,8 @@ params = trt.TrtConversionParams(
     max_batch_size=64, allow_build_at_runtime=True)
 
 converter = trt.TrtGraphConverterV2(input_saved_model_dir=args.mod_path, conversion_params=params)
-converter.convert()
+calib_input = input_fn if args.mode == 'INT8' else None
+converter.convert(calib_input)
 if args.build:
 	converter.build(input_fn=input_fn)
 converter.save(args.out_path)
