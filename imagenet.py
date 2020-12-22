@@ -37,7 +37,7 @@ def load_image(im_path, crop_box, pre=''): # crop_box: target_h, target_w
     
     return image
 
-def load_and_preprocess_ds(crop_box):
+def load_ds(crop_box):
 	img_ds = tf.data.Dataset.from_tensor_slices(val_paths)
 	label_ds = tf.data.Dataset.from_tensor_slices([label_to_index[i] for i in val_labels])
 	img_ds = img_ds.map(lambda x: load_image(x, crop_box, val_datapath))

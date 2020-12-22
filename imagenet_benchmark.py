@@ -120,6 +120,7 @@ def main(args):
 			mem_flag.set()
 		time = repeat(test_code, number=1, globals=test_vars, repeat=args.n)
 		time = min(time)
+		del test_ds
 		print('Metrics for model "%s", with batch size %d:' % (mod_file, b_sz))
 		print('Time: %.3f s' % time)
 		print('Speed: %.1f inf/s' % (steps * b_sz / time))
@@ -177,9 +178,13 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 
 	return total_corrects / total_examples
 
-def measure_ram(sig_in, sig_out, interval, num_tests=1):	
-	command = ['nvidia-smi', '--query-gpu=memory.used', 
-	'--format=csv,noheader,nounits']
+def measure_ram(sig_in, sig_out, interval, num_tests=1):
+	arch = str(subprocess.run(['uname', '-m'], stdout=subprocess.PIPE).stdout)
+	if 'x86_64' in arch:
+		command = ['nvidia-smi', '--query-gpu=memory.used', 
+		'--format=csv,noheader,nounits']
+	elif 'aarch64' in arch:
+		command = ['bash', 'mem.sh']
 	initial_probe = subprocess.run(command, stdout=subprocess.PIPE).stdout
 	for i in range(num_tests):
 		measures = []
@@ -190,7 +195,7 @@ def measure_ram(sig_in, sig_out, interval, num_tests=1):
 			measures.append(int(probe))
 			t.sleep(interval)
 		#print('Idle memory usage: %s MB' % initial_probe)
-		print('Max memory usage: %d MB' % (max(measures) - int(initial_probe)))
+		print('Max memory usage: %d MB' % (max(measures) - int(initial_probe) - 256))
 	return
 
 import tensorflow as tf 
