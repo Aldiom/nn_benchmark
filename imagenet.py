@@ -27,13 +27,12 @@ def load_image(im_path, crop_box, pre=''): # crop_box: target_h, target_w
     image = tf.io.read_file(pre + im_path)
     image = tf.image.decode_jpeg(image, channels=3) 
     im_shape = tf.cast(tf.shape(image)[-3:-1], 'float32')
-    if crop_box[0] / im_shape[0] < crop_box[1] / im_shape[1]:
-	    scale = crop_box[1] / im_shape[1]
+    if crop_box[0] < crop_box[1]:
+	    scale = 256 / crop_box[0]
     else:
-        scale = crop_box[0] / im_shape[0] 
+        scale = 256 / crop_box[1] 
     image = tf.image.resize(image, [int(scale*im_shape[0]), int(scale*im_shape[1])])
     image = tf.image.resize_with_crop_or_pad(image, crop_box[0], crop_box[1])
-    #image /= 255.0  # normalize to [0,1] range
     
     return image
 
