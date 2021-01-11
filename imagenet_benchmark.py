@@ -157,6 +157,10 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 
 	total_corrects = 0
 	total_examples = 0
+	samples = 0
+	for i in test_ds:
+		samples += 1
+	bar = tf.keras.utils.Progbar(samples, interval=0.2)
 	for x_batch, y_batch in test_ds:
 		b_sz = y_batch.shape[0]  
 		if b_sz != 64:
@@ -175,6 +179,7 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 		corrects = outputs[0:b_sz] == y_batch.numpy()
 		total_corrects += corrects.sum()
 		total_examples += b_sz
+		bar.add(b_sz)
 
 	return total_corrects / total_examples
 
