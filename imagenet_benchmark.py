@@ -131,7 +131,10 @@ def main(args):
 			#mem_thread.join()
 	return 0
 
-def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
+def eval_accuracy(model, test_ds, mod_type, in_shape=[224,224,3]):
+	samples = 0
+	for i in test_ds:
+		samples += 1
 	test_ds = test_ds.batch(64)
 	in_shape = list(in_shape)
 
@@ -157,9 +160,6 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[32,32,3]):
 
 	total_corrects = 0
 	total_examples = 0
-	samples = 0
-	for i in test_ds:
-		samples += 1
 	bar = tf.keras.utils.Progbar(samples, interval=0.2)
 	for x_batch, y_batch in test_ds:
 		b_sz = y_batch.shape[0]  
