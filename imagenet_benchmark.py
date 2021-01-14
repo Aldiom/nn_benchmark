@@ -3,6 +3,7 @@ from os.path import isdir
 import subprocess 
 import threading
 import time as t
+import socket
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -12,6 +13,7 @@ parser.add_argument('--cpu', help='force CPU usage', action='store_true')
 parser.add_argument('--acc', help='measure accuracy', action='store_true')
 parser.add_argument('--short', help='short measurement', action='store_true')
 parser.add_argument('--mem', help='measure RAM usage', action='store_true')
+parser.add_argument('--pow_serv', help='power measuring server IP')
 parser.add_argument('--input', help='input size', type=int, default=224)
 parser.add_argument('-n', help='number of trials', type=int, default=1)
 arguments = parser.parse_args()
@@ -28,16 +30,19 @@ def main(args):
 		dev = 'device:GPU:0'
 
 	in_shape = (args.input, args.input, 3)
-	
+	b_sizes = list(map(int, b_sizes))
+
+	if args.pow_serv:
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.connect((args.pow_serv, 7700)) # (host, port)
+		#sock.sendall() recordar cerrar socket	
+
 	if args.mem:
 		mem_flag = threading.Event()
 		syn_flag = threading.Event()
-		#mem_flag.acquire()
 		mem_thread = threading.Thread(target=measure_ram, 
 			args=(mem_flag, syn_flag, 0.2, len(b_sizes)))
 		mem_thread.start()
-		#mem_flag.release()
-		#mem_flag.acquire()
 
 	print('Loading model...')
 	start = t.time()
@@ -51,10 +56,6 @@ def main(args):
 	mins = (stop - start) // 60
 	secs = (stop - start) % 60
 	print('Loaded in %d min %.1f sec' % (mins, secs))
-	#if args.mem:
-		#pass
-		#mem_flag.release()
-		#mem_flag.acquire()
 		
 	if args.acc:
 		print('Evaluating accuracy...')
@@ -67,57 +68,86 @@ def main(args):
 			mod_type = 'keras'
 		eval_ds = imagenet.load_ds(in_shape[0:2])
 		acc = eval_accuracy(model, eval_ds, mod_type, in_shape)	
-	
-	if args.short: print('Short test selected')
-	test_sz = 256 if args.short else 1024
+
+	if args.short:
+		print('Short test selected')
+		test_sz = 256
+	else:
+		test_sz = 1024
+
+	test_ds = None
+
+	if tflite:
+		in_idx = model.get_input_details()[0]['index'] 
+		out_idx = model.get_output_details()[0]['index'] 
+		test_code = ['for batch in test_ds:',
+		' batch = cast(batch, "float32")',
+		' model.set_tensor(in_idx, batch)',
+		' model.invoke()',
+		' prediction = model.get_tensor(out_idx)']
+		in_type = model.get_input_details()[0]['dtype']
+		if in_type == tf.uint8:
+			test_code.pop(1)
+		test_code = '\n'.join(test_code)
+		test_vars = {'test_ds':test_ds, 'model':model, 
+				'in_idx':in_idx, 'out_idx':out_idx, 'cast':tf.cast}
+	elif sav_mod: 
+		infer = model.signatures['serving_default']
+		output = infer.structured_outputs.keys()
+		output = list(output)[0]
+		test_code = '\n'.join(('for batch in test_ds:',
+		' prediction = infer(batch)[output]'))
+		test_vars = {'test_ds':test_ds, 'infer':infer, 'output':output}
+	else:
+		test_code = '\n'.join(('with device(dev):',
+		' for batch in test_ds:',
+		'  prediction = model.predict(batch)'))
+		test_vars = {'device':tf.device, 'dev':dev,
+				'test_ds':test_ds, 'model':model}
+
+	if args.pow_serv:
+		b_sz = 64
+		print('Calculating appropiate dataset size...')
+		while True:
+			try:
+				if tflite:
+					model.resize_tensor_input(in_idx, (b_sz,) + in_shape)
+					model.allocate_tensors()
+				test_ds = tf.ones((b_sz,) + in_shape, tf.uint8)
+				test_ds = tf.data.Dataset.from_tensors(test_ds)
+				test_vars['test_ds'] = test_ds
+				samp_time = min(repeat(test_code, number=1, globals=test_vars, repeat=2))
+				test_sz = 2.5 * b_sz / samp_time # 2.5 s de inferencia min
+				test_sz = max(b_sizes) * ((test_sz+max(b_sizes)-1) // max(b_sizes))
+				test_sz = int(test_sz)
+				break
+			except:
+				b_sz /= 2
+				assert b_sz > 0
+		sock.sendall(b'trigMeas')
+		idle_pow = int(sock.recv(16))
+
 	bench_ds = tf.random.uniform((test_sz,) + in_shape, minval=0, 
 								maxval=255, dtype=tf.int32)
 	bench_ds = tf.data.Dataset.from_tensor_slices(bench_ds)
 	bench_ds = bench_ds.map(lambda x: tf.cast(x, tf.uint8))
 	bench_ds = bench_ds.cache()
-	b_sizes = map(int, b_sizes)
+
 	for b_sz in b_sizes:
 		test_ds = bench_ds.batch(b_sz)
+		test_vars['test_ds'] = test_ds
 		steps = test_sz // b_sz
-		#if args.mem:
-			#pass
-			#mem_flag.release()
-			#mem_flag.acquire()
 		print('Measuring speed...')
 		if tflite:
-			in_idx = model.get_input_details()[0]['index'] 
-			out_idx = model.get_output_details()[0]['index'] 
 			model.resize_tensor_input(in_idx, (b_sz,) + in_shape)
 			model.allocate_tensors()
-			test_code = ['for batch in test_ds:',
-			' batch = cast(batch, "float32")',
-			' model.set_tensor(in_idx, batch)',
-			' model.invoke()',
-			' prediction = model.get_tensor(out_idx)']
-			in_type = model.get_input_details()[0]['dtype']
-			if in_type == tf.uint8:
-				test_code.pop(1)
-			test_code = '\n'.join(test_code)
-			test_vars = {'test_ds':test_ds, 'model':model, 
-					'in_idx':in_idx, 'out_idx':out_idx, 'cast':tf.cast}
-		elif sav_mod: 
-			infer = model.signatures['serving_default']
-			output = infer.structured_outputs.keys()
-			output = list(output)[0]
-			test_code = '\n'.join(('for batch in test_ds:',
-			' prediction = infer(batch)[output]'))
-			test_vars = {'test_ds':test_ds, 'infer':infer, 'output':output}
-		else:
-			test_code = '\n'.join(('with device(dev):',
-			' for batch in test_ds:',
-			'  prediction = model.predict(batch)'))
-			test_vars = {'device':tf.device, 'dev':dev,
-					'test_ds':test_ds, 'model':model}
-	
 		if args.mem:
 			syn_flag.wait()
 			syn_flag.clear()
 			mem_flag.set()
+		if args.pow_serv:
+			timeit(test_code, number=1, globals=test_vars)
+			sock.sendall(b'trigMeas')
 		time = repeat(test_code, number=1, globals=test_vars, repeat=args.n)
 		time = min(time)
 		del test_ds
@@ -126,9 +156,16 @@ def main(args):
 		print('Speed: %.1f inf/s' % (steps * b_sz / time))
 		if args.acc:
 			print('Accuracy: %.2f' % (100 * acc), '%')
+		if args.pow_serv:
+			power = int(sock.recv(16))
+			print('Average power: %d mW (+ %d mW idle)' % (power-idle_pow, idle_pow))
 		if args.mem:
 			mem_flag.clear()
 			#mem_thread.join()
+
+	if args.pow_serv:
+		sock.sendall(b'endMeas')
+		sock.close()
 	return 0
 
 def eval_accuracy(model, test_ds, mod_type, in_shape=[224,224,3]):
@@ -188,7 +225,7 @@ def measure_ram(sig_in, sig_out, interval, num_tests=1):
 	if 'x86_64' in arch:
 		command = ['nvidia-smi', '--query-gpu=memory.used', 
 		'--format=csv,noheader,nounits']
-	elif 'aarch64' in arch:
+	else:
 		command = ['bash', 'mem.sh']
 	initial_probe = subprocess.run(command, stdout=subprocess.PIPE).stdout
 	for i in range(num_tests):
