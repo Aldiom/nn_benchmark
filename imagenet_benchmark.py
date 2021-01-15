@@ -11,11 +11,11 @@ parser.add_argument('mod_file', help='model file')
 parser.add_argument('b_sz', help='batch size')
 parser.add_argument('--cpu', help='force CPU usage', action='store_true')
 parser.add_argument('--acc', help='measure accuracy', action='store_true')
-parser.add_argument('--short', help='short measurement', action='store_true')
 parser.add_argument('--mem', help='measure RAM usage', action='store_true')
 parser.add_argument('--pow_serv', help='power measuring server IP')
 parser.add_argument('--input', help='input size', type=int, default=224)
 parser.add_argument('-n', help='number of trials', type=int, default=1)
+parser.add_argument('-s', help='measurement sample size', type=int, default=1024)
 arguments = parser.parse_args()
 
 def main(args):   
@@ -69,11 +69,9 @@ def main(args):
 		eval_ds = imagenet.load_ds(in_shape[0:2])
 		acc = eval_accuracy(model, eval_ds, mod_type, in_shape)	
 
-	if args.short:
-		print('Short test selected')
-		test_sz = 256
-	else:
-		test_sz = 1024
+	if args.s != 1024:
+		print('Custom sample size:', args.s, 'samples')
+	test_sz = args.s
 
 	test_ds = None
 
@@ -105,33 +103,35 @@ def main(args):
 		test_vars = {'device':tf.device, 'dev':dev,
 				'test_ds':test_ds, 'model':model}
 
-	if args.pow_serv:
-		b_sz = 64
-		print('Calculating appropiate dataset size...')
-		while True:
-			try:
-				if tflite:
-					model.resize_tensor_input(in_idx, (b_sz,) + in_shape)
-					model.allocate_tensors()
-				test_ds = tf.ones((b_sz,) + in_shape, tf.uint8)
-				test_ds = tf.data.Dataset.from_tensors(test_ds)
-				test_vars['test_ds'] = test_ds
-				samp_time = min(repeat(test_code, number=1, globals=test_vars, repeat=2))
-				test_sz = 2.5 * b_sz / samp_time # 2.5 s de inferencia min
-				test_sz = max(b_sizes) * ((test_sz+max(b_sizes)-1) // max(b_sizes))
-				test_sz = int(test_sz)
-				break
-			except:
-				b_sz /= 2
-				assert b_sz > 0
-		sock.sendall(b'trigMeas')
-		idle_pow = int(sock.recv(16))
-
 	bench_ds = tf.random.uniform((test_sz,) + in_shape, minval=0, 
 								maxval=255, dtype=tf.int32)
 	bench_ds = tf.data.Dataset.from_tensor_slices(bench_ds)
 	bench_ds = bench_ds.map(lambda x: tf.cast(x, tf.uint8))
 	bench_ds = bench_ds.cache()
+	N = 1 if args.pow_serv else args.n
+
+	if args.pow_serv:
+		#b_sz = 64
+		#print('Calculating appropiate dataset size...')
+		#while True:
+		#	try:
+		#		if tflite:
+		#			model.resize_tensor_input(in_idx, (b_sz,) + in_shape)
+		#			model.allocate_tensors()
+		#		test_ds = tf.ones((b_sz,) + in_shape, tf.uint8)
+		#		test_ds = tf.data.Dataset.from_tensors(test_ds)
+		#		test_vars['test_ds'] = test_ds
+		#		samp_time = min(repeat(test_code, number=1, globals=test_vars, repeat=2))
+		#		test_sz = 2.5 * b_sz / samp_time # 2.5 s de inferencia min
+		#		test_sz = max(b_sizes) * ((test_sz+max(b_sizes)-1) // max(b_sizes))
+		#		test_sz = int(test_sz)
+		#		break
+		#	except:
+		#		b_sz /= 2
+		#		assert b_sz > 0
+		print('Measuring idle power...')
+		sock.sendall(b'trigMeas')
+		idle_pow = int(sock.recv(16))
 
 	for b_sz in b_sizes:
 		test_ds = bench_ds.batch(b_sz)
@@ -146,9 +146,9 @@ def main(args):
 			syn_flag.clear()
 			mem_flag.set()
 		if args.pow_serv:
-			timeit(test_code, number=1, globals=test_vars)
+			repeat(test_code, number=1, globals=test_vars, repeat=max(1,args.n-1))
 			sock.sendall(b'trigMeas')
-		time = repeat(test_code, number=1, globals=test_vars, repeat=args.n)
+		time = repeat(test_code, number=1, globals=test_vars, repeat=N)
 		time = min(time)
 		del test_ds
 		print('Metrics for model "%s", with batch size %d:' % (mod_file, b_sz))
