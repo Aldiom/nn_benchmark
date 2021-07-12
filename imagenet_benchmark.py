@@ -41,7 +41,7 @@ def main(args):
 		mem_flag = threading.Event()
 		syn_flag = threading.Event()
 		mem_thread = threading.Thread(target=measure_ram, 
-			args=(mem_flag, syn_flag, 0.2, len(b_sizes)))
+			args=(mem_flag, syn_flag, 0.2, len(b_sizes), tflite))
 		mem_thread.start()
 
 	print('Loading model...')
@@ -220,9 +220,9 @@ def eval_accuracy(model, test_ds, mod_type, in_shape=[224,224,3]):
 
 	return total_corrects / total_examples
 
-def measure_ram(sig_in, sig_out, interval, num_tests=1):
+def measure_ram(sig_in, sig_out, interval, num_tests=1, cpu_mode=False):
 	arch = str(subprocess.run(['uname', '-m'], stdout=subprocess.PIPE).stdout)
-	if 'x86_64' in arch:
+	if 'x86_64' in arch and not cpu_mode:
 		command = ['nvidia-smi', '--query-gpu=memory.used', 
 		'--format=csv,noheader,nounits']
 	else:
@@ -237,7 +237,7 @@ def measure_ram(sig_in, sig_out, interval, num_tests=1):
 			measures.append(int(probe))
 			t.sleep(interval)
 		#print('Idle memory usage: %s MB' % initial_probe)
-		print('Max memory usage: %d MB' % (max(measures) - int(initial_probe) - 256))
+		print('Max memory usage: %d MB' % (max(measures) - int(initial_probe)))
 	return
 
 import tensorflow as tf 
