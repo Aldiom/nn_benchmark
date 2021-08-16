@@ -11,6 +11,7 @@ Requirements:
 - Tensorflow 2.2.0+
 - Numpy 1.16.4+
 - Jupyter 1.0.0+
+- Torchvision(CPU) 0.9.2+
 
 Script usage:
 ```
