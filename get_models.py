@@ -12,7 +12,15 @@ x = tf.keras.applications.mobilenet_v2.preprocess_input(x)
 x = mobnet(x)
 mobnet = tf.keras.Model(inputs=netin, outputs=x)
 
+# save in Saved Model and TFLite (32 & 16 bits) formats
 mobnet.save(route + 'mobilenet')
+converter = tf.lite.TFLiteConverter.from_keras_model(mobnet)
+with tf.io.gfile.GFile(route + 'mobilenet.tflite', 'wb') as f:
+    f.write(converter.convert())
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+converter.target_spec.supported_types = [tf.float16]
+with tf.io.gfile.GFile(route + 'mobilenet_f16.tflite', 'wb') as f:
+    f.write(converter.convert())
 print('Done')
 
 print('Getting ResNet50...')
@@ -30,7 +38,15 @@ resnet.layers[2].set_weights(in_weights)
 x = resnet(x)
 resnet = tf.keras.Model(inputs=netin, outputs=x)
 
+# save in Saved Model and TFLite (32 & 16 bits) formats
 resnet.save(route + 'resnet50')
+converter = tf.lite.TFLiteConverter.from_keras_model(resnet)
+with tf.io.gfile.GFile(route + 'resnet50.tflite', 'wb') as f:
+    f.write(converter.convert())
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+converter.target_spec.supported_types = [tf.float16]
+with tf.io.gfile.GFile(route + 'resnet50_f16.tflite', 'wb') as f:
+    f.write(converter.convert())
 print('Done')
 
 print('Getting VGG16-BN...')
@@ -153,6 +169,14 @@ x = tf.keras.applications.imagenet_utils.preprocess_input(x, mode='torch')
 x = vgg16(x)
 vgg16 = tf.keras.Model(inputs=netin, outputs=x)
 
+# save in Saved Model and TFLite (32 & 16 bits) formats
 vgg16.save(route + 'vgg16bn')
+converter = tf.lite.TFLiteConverter.from_keras_model(vgg16)
+with tf.io.gfile.GFile(route + 'vgg16bn.tflite', 'wb') as f:
+    f.write(converter.convert())
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+converter.target_spec.supported_types = [tf.float16]
+with tf.io.gfile.GFile(route + 'vgg16bn_f16.tflite', 'wb') as f:
+    f.write(converter.convert())
 print('Done')
 
