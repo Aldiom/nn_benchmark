@@ -33,3 +33,5 @@ optional arguments:
   -n N                 number of trials
   -s S                 measurement sample size
 ```
+
+For training and accuracy measurements, make sure to have the ImageNet dataset on your PC. You can check [Academic torrents](https://academictorrents.com/) to find it.
