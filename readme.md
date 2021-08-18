@@ -2,15 +2,16 @@
 This is a benchmark for inference optimization methods for CNNs. On this repo 
 you will find scripts for the benchmark itself and for the implementation on
 TensorFlow of 3 optimization methods:
--  Tai, Xiao, Zhang, et al., *“Convolutional neural networks with low-rank regularization”* https://arxiv.org/pdf/1511.06067
--  Astrid & Lee, *“CP-decomposition with tensor power method for convolutional neural networks compression”* https://arxiv.org/pdf/1701.07148
--  Liu, Li, Shen, et al., *“Learning efficient convolutional networks through network slimming”* https://openaccess.thecvf.com/content_ICCV_2017/papers/Liu_Learning_Efficient_Convolutional_ICCV_2017_paper.pdf
+-  Tai, Xiao, Zhang, et al., *“Convolutional neural networks with low-rank regularization”* [link](https://arxiv.org/pdf/1511.06067)
+-  Astrid & Lee, *“CP-decomposition with tensor power method for convolutional neural networks compression”* [link](https://arxiv.org/pdf/1701.07148)
+-  Liu, Li, Shen, et al., *“Learning efficient convolutional networks through network slimming”* [link](https://openaccess.thecvf.com/content_ICCV_2017/papers/Liu_Learning_Efficient_Convolutional_ICCV_2017_paper.pdf)
 
 Requirements:
 - Python 3.5.2+
 - Tensorflow 2.2.0+
 - Numpy 1.16.4+
 - Jupyter 1.0.0+
+- Torchvision(CPU) 0.9.2+
 
 Script usage:
 ```
@@ -32,3 +33,5 @@ optional arguments:
   -n N                 number of trials
   -s S                 measurement sample size
 ```
+
+For training and accuracy measurements, make sure to have the ImageNet dataset on your PC. You can check [Academic torrents](https://academictorrents.com/) to find it.
