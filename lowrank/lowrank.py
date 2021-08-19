@@ -81,7 +81,7 @@ def LR_clone(layer, weight_dict, ratio=0.95): # ratio for automatic rank choosin
         bias = config['use_bias']
         newlayer = Conv2DLowRank(N, K, d, strides=stride, padding=pad, 
                                  activation=act, use_bias=bias, name=name)
-        weight_dict[newlayer.name] = [V, H]
+        weight_dict[newlayer.name] = [V, H] # weights are stored to assign them later
         if bias: weight_dict[newlayer.name].append(layer.weights[1].numpy())
         return newlayer
     else:
