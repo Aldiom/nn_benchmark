@@ -18,7 +18,7 @@ class ChannelSelectWrapper(tf.keras.layers.Layer):
         return config
 
 
-def prune_clone(layer, to_prune):
+def prune_clone(layer, to_prune): # auxiliary function to prune a network while rebuilding it
     config = layer.get_config() 
     try:
         if layer.input.name in to_prune and 'use_bias' in config:
@@ -35,7 +35,7 @@ def prune_clone(layer, to_prune):
     return newlayer
 
 
-ef apply_pruning(model, fraction): # prune a given fraction of channels
+def apply_pruning(model, fraction): # prune a given fraction of channels
     assert fraction < 1, 'fraction must be <1'
     bn_channels = []
     bn_idx = []
@@ -171,7 +171,7 @@ ef apply_pruning(model, fraction): # prune a given fraction of channels
             if unprunned.size == unprunned.sum(): # check if pruned or not, depends on gammas magnitudes
                 continue 
             elif oldlayer.name not in unprunnable: # with this you later see which weights are copied 
-                backward_prune[in_connect[oldlayer.name]] = unprunned # in conv before this BN
+                backward_prune[in_connect[oldlayer.name]] = unprunned # in the conv before this BN
             outref = oldlayer.output.name
             activ = 'linear'
             changed = True 
@@ -216,7 +216,7 @@ ef apply_pruning(model, fraction): # prune a given fraction of channels
             weights = oldlayer.get_weights()
 
             is_dw = isinstance(oldlayer, tf.keras.layers.DepthwiseConv2D) 
-            if oldlayer.output.name in backward_prune: # !! se asume que la bn va justo despues de la conv
+            if oldlayer.output.name in backward_prune: # it is assumed that the BN comes right after the conv
                 backprune = backward_prune[oldlayer.output.name] # bool vector, comes from ahead
                 if is_dw:
                     weights = [weights[n][:,:,backprune,:] for n in range(len(weights))]
