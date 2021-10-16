@@ -11,7 +11,7 @@ Requirements:
 - Tensorflow 2.2.0+
 - Numpy 1.16.4+
 - Jupyter 1.0.0+
-- Torchvision(CPU) 0.9.2+
+- Torchvision(CPU) 0.9.2+ (*only needed for building VGG16-BN*)
 
 Script usage:
 ```
@@ -34,4 +34,7 @@ optional arguments:
   -s S                 measurement sample size
 ```
 
-For training and accuracy measurements, make sure to have the ImageNet dataset on your PC. You can check [Academic torrents](https://academictorrents.com/) to find it.
+For training and accuracy measurements, make sure to have the ImageNet (ILSVRC) dataset on your PC. You can check [Academic torrents](https://academictorrents.com/) to find it.
+
+*Note: For measuring speed or power, try using a nº of trials (-n) of 2 to 8, as several GPUs need some warm up passes to fully activate their full-performance mode.*
+
