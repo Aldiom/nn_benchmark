@@ -25,9 +25,11 @@ def main(args):
 	b_sizes = args.b_sz.split(',')
 	if args.cpu:
 		print('Forcing CPU usage')
-		dev = 'device:CPU:0'
-	else: #TODO: chequear si hay gpu en sistema
-		dev = 'device:GPU:0'
+		try:
+			# Disable all GPUs
+			tf.config.set_visible_devices([], 'GPU')
+		except:
+			pass
 
 	in_shape = (args.input, args.input, 3)
 	b_sizes = list(map(int, b_sizes))
@@ -97,11 +99,9 @@ def main(args):
 		' prediction = infer(batch)[output]'))
 		test_vars = {'test_ds':test_ds, 'infer':infer, 'output':output}
 	else:
-		test_code = '\n'.join(('with device(dev):',
-		' for batch in test_ds:',
-		'  prediction = model.predict(batch)'))
-		test_vars = {'device':tf.device, 'dev':dev,
-				'test_ds':test_ds, 'model':model}
+		test_code = '\n'.join(('for batch in test_ds:',
+		' prediction = model.predict(batch)'))
+		test_vars = {'test_ds':test_ds, 'model':model}
 
 	bench_ds = tf.random.uniform((test_sz,) + in_shape, minval=0, 
 								maxval=255, dtype=tf.int32)
@@ -111,24 +111,6 @@ def main(args):
 	N = 1 if args.pow_serv else args.n
 
 	if args.pow_serv:
-		#b_sz = 64
-		#print('Calculating appropiate dataset size...')
-		#while True:
-		#	try:
-		#		if tflite:
-		#			model.resize_tensor_input(in_idx, (b_sz,) + in_shape)
-		#			model.allocate_tensors()
-		#		test_ds = tf.ones((b_sz,) + in_shape, tf.uint8)
-		#		test_ds = tf.data.Dataset.from_tensors(test_ds)
-		#		test_vars['test_ds'] = test_ds
-		#		samp_time = min(repeat(test_code, number=1, globals=test_vars, repeat=2))
-		#		test_sz = 2.5 * b_sz / samp_time # 2.5 s de inferencia min
-		#		test_sz = max(b_sizes) * ((test_sz+max(b_sizes)-1) // max(b_sizes))
-		#		test_sz = int(test_sz)
-		#		break
-		#	except:
-		#		b_sz /= 2
-		#		assert b_sz > 0
 		print('Measuring idle power...')
 		sock.sendall(b'trigMeas')
 		idle_pow = int(sock.recv(16))
